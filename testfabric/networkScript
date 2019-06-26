@@ -1,0 +1,64 @@
+
+General Commands:
+
+    docker exec -it cli bash
+    docker ps -a
+    docker stop $(docker ps -aq)
+    docker rm $(docker ps -aq)
+
+
+In customNetwork folder
+
+breakinfg the command => ./byfn.sh generate
+
+ 1. generate certificates
+
+    ./cryptogen generate --config=./crypto-config.yaml
+
+    (DELETE old crypt-config folder for changing configuration)
+
+2.  create genesisblock
+    if [ "$CONSENSUS_TYPE" == "solo" ]; then
+    ./configtxgen -profile TwoOrgsOrdererGenesis -channelID byfn-sys-channel -outputBlock ./channel-artifacts/genesis.block
+    elif [ "$CONSENSUS_TYPE" == "kafka" ]; then
+    ./configtxgen -profile SampleDevModeKafka -channelID byfn-sys-channel -outputBlock ./channel-artifacts/genesis.block
+
+3. create channel
+
+    ./configtxgen -profile TwoOrgsChannel -outputCreateChannelTx ./channel-artifacts/channel.tx -channelID testchannel
+
+4. create anchor peers
+
+    ./configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org1MSPanchors.tx -channelID testchannel -asOrg Org1MSP
+    ./configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org2MSPanchors.tx -channelID testchannel -asOrg Org2MSP
+
+
+breakinfg the command => ./byfn.sh up -l node
+
+    docker-compose -f docker-compose-cli.yaml down
+
+1.  running CA server for org1 and org2
+        docker-compose -f docker-compose-cli.yaml up -d ca1.example.com ca2.example.com orderer.example.com peer0.org1.example.com peer1.org1.example.com peer0.org2.example.com peer1.org2.example.com
+
+2.  running COUCHDB  and CA server for each peer in org1 and org2
+        docker-compose -f docker-compose-couch.yaml up -d couchdb0 peer0.org1.example.com couchdb1 peer1.org1.example.com couchdb2 peer0.org2.example.com couchdb3 peer1.org2.example.com
+    
+        docker-compose -f docker-compose-e2e-template.yaml up -d
+    
+3.  create and join channel      
+        docker exec cli scripts/script.sh $CHANNEL_NAME $CLI_DELAY $LANGUAGE $CLI_TIMEOUT $VERBOSE
+
+        docker exec cli scripts/script.sh testchannel 3 node 10 false
+
+
+breakinfg the command => ./byfn.sh down
+
+    docker-compose -f docker-compose-cli.yaml -f docker-compose-couch.yaml -f docker-compose-e2e-template.yaml down --volumes --remove-orphans
+
+
+
+    peer chaincode install -n fabcar -v 1.0 -l node -p /opt/gopath/src/github.com/chaincode/fabcar/typescript/
+
+    peer chaincode instantiate -o orderer.example.com:7050 -C testchannel -n fabcar -l "node" -v 1.0 -c '{"Args":[]}' -P "AND ('Org1MSP.member','Org2MSP.member')"
+
+    peer chaincode invoke -o orderer.example.com:7050 -C mychannel -n fabcar -c '{"function":"initLedger","Args":[]}'
